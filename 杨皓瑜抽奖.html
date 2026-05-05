@@ -235,14 +235,6 @@
         .btn-primary:hover { background: #f1f8f6; }
 
         .btn-label { font-size: 12px; opacity: 0.7; margin-top: 2px; font-weight: normal; }
-
-        .confetti {
-            position: absolute;
-            width: 10px;
-            height: 10px;
-            background-color: #f00;
-            opacity: 0;
-        }
     </style>
 </head>
 <body>
@@ -270,7 +262,7 @@
     </div>
 
     <script>
-        // 配置：你的WPS金山文档链接
+        // 你的WPS金山文档链接
         const WPS_URL = "https://www.kdocs.cn/l/cuhoGwiMpyIQ";
 
         let currentPower = 0;
@@ -295,33 +287,32 @@
             }
         }
 
-        // 从WPS表格读取灵力（用国内无跨域代理）
+        // 公网环境专用读取逻辑
         async function fetchPower() {
             try {
-                // 国内免费CORS代理，支持金山文档
-                const proxy = "https://api.allorigins.win/raw?url=";
+                // 使用稳定的公网CORS代理
+                const proxy = "https://api.codetabs.com/v1/proxy?quest=";
                 const url = proxy + encodeURIComponent(WPS_URL);
                 const res = await fetch(url);
                 const html = await res.text();
 
-                // 匹配表格数据：杨皓瑜 + 现在能量 + 总能量
+                // 精准匹配WPS表格数据格式
                 const match = html.match(/杨皓瑜.*?(\d+).*?(\d+)/);
                 if (match) {
                     currentPower = parseInt(match[1]) || 0;
                     maxPower = parseInt(match[2]) || 100;
+                    updateUI();
+                    alert("✅ 同步成功！已从WPS表格获取最新灵力");
                 } else {
                     throw new Error("未找到数据，请检查表格格式");
                 }
-
-                updateUI();
-                alert("✅ 同步成功！已从WPS表格获取最新灵力");
             } catch (err) {
                 console.error("同步失败", err);
                 alert("❌ 同步失败：" + err.message);
             }
         }
 
-        // 页面加载时自动同步一次
+        // 页面加载时自动同步
         window.onload = function() {
             fetchPower();
         };
