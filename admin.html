@@ -1,0 +1,149 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <title>灵力·表格管理后台</title>
+    <style>
+        body {
+            max-width: 600px;
+            margin: 40px auto;
+            font-family: "Microsoft Yahei", sans-serif;
+            padding: 0 20px;
+        }
+        h2 { color: #8B5E3C; text-align: center; margin-bottom: 20px; }
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-bottom: 20px;
+        }
+        th,td {
+            border: 1px solid #ccc;
+            padding: 10px;
+            text-align: center;
+        }
+        th { background: #f5f5f5; }
+        input {
+            width: 90px;
+            padding: 6px;
+            border: 1px solid #ccc;
+            border-radius: 4px;
+            text-align: center;
+        }
+        .btn-box { display: flex; gap: 10px; justify-content: center; flex-wrap: wrap; }
+        button {
+            padding: 8px 16px;
+            border: none;
+            border-radius: 6px;
+            cursor: pointer;
+        }
+        .add-btn { background: #4caf50; color: #fff; }
+        .save-btn { background: #2d8cf0; color: #fff; }
+        .del-btn { background: #f44336; color: #fff; }
+    </style>
+</head>
+<body>
+    <h2>角色灵力 在线表格管理</h2>
+
+    <table id="roleTable">
+        <thead>
+            <tr>
+                <th>角色名称</th>
+                <th>当前灵力</th>
+                <th>最大灵力</th>
+                <th>操作</th>
+            </tr>
+        </thead>
+        <tbody></tbody>
+    </table>
+
+    <div class="btn-box">
+        <button class="add-btn" onclick="addRow()">➕ 添加新角色</button>
+        <button class="save-btn" onclick="saveData()">💾 保存全部修改</button>
+    </div>
+
+    <script>
+        // 仓库配置
+        const repoOwner = "MrHomeWP";
+        const repoName = "work";
+        const fileName = "data.json";
+        let fileSha = "";
+        let tableData = [];
+
+        // 读取线上JSON
+        async function loadData() {
+            const res = await fetch(`https://${repoOwner}.github.io/${repoName}/${fileName}`);
+            tableData = await res.json();
+            // 获取文件sha用于提交修改
+            const info = await fetch(`https://api.github.com/repos/${repoOwner}/${repoName}/contents/${fileName}`);
+            const json = await info.json();
+            fileSha = json.sha;
+            renderTable();
+        }
+
+        // 渲染表格
+        function renderTable() {
+            const tbody = document.querySelector("#roleTable tbody");
+            tbody.innerHTML = "";
+            tableData.forEach((item, idx) => {
+                const tr = document.createElement("tr");
+                tr.innerHTML = `
+                    <td><input value="${item.name}" data-key="name" data-index="${idx}"></td>
+                    <td><input type="number" value="${item.currentPower}" data-key="currentPower" data-index="${idx}"></td>
+                    <td><input type="number" value="${item.maxPower}" data-key="maxPower" data-index="${idx}"></td>
+                    <td><button class="del-btn" onclick="delRow(${idx})">删除</button></td>
+                `;
+                tbody.appendChild(tr);
+            });
+        }
+
+        // 添加空行
+        function addRow() {
+            tableData.push({
+                name: "新角色",
+                currentPower: 0,
+                maxPower: 100
+            });
+            renderTable();
+        }
+
+        // 删除行
+        function delRow(idx) {
+            tableData.splice(idx, 1);
+            renderTable();
+        }
+
+        // 保存到GitHub data.json
+        async function saveData() {
+            // 收集表格输入框内容
+            const inputs = document.querySelectorAll("#roleTable tbody input");
+            inputs.forEach(inp => {
+                const idx = Number(inp.dataset.index);
+                const key = inp.dataset.key;
+                tableData[idx][key] = key === "name" ? inp.value : Number(inp.value);
+            });
+
+            // base64 编码内容
+            const content = btoa(JSON.stringify(tableData, null, 2));
+
+            // 提交更新
+            await fetch(`https://api.github.com/repos/${repoOwner}/${repoName}/contents/${fileName}`, {
+                method: "PUT",
+                headers: {
+                    "Content-Type": "application/json",
+                    "Accept": "application/vnd.github+json"
+                },
+                body: JSON.stringify({
+                    message: "后台表格更新灵力数据",
+                    content: content,
+                    sha: fileSha
+                })
+            });
+            alert("✅ 保存成功！主页可同步全部角色数据");
+            loadData();
+        }
+
+        // 页面加载自动读取
+        window.onload = loadData;
+    </script>
+</body>
+</html>
