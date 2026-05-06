@@ -68,10 +68,11 @@
 </head>
 <body>
 
-<!-- 登录：只需要 Token -->
+<!-- 登录：用户名 + Token -->
 <div id="loginBox" class="login-box">
-    <h2>Token 登录</h2>
-    <input id="token" type="password" placeholder="请输入 GitHub Token">
+    <h2>管理后台登录</h2>
+    <input id="username" placeholder="请输入用户名" autocomplete="off">
+    <input id="token" type="password" placeholder="请输入 GitHub Token" autocomplete="off">
     <button class="login-btn" onclick="login()">登录</button>
 </div>
 
@@ -95,6 +96,8 @@
 </div>
 
 <script>
+    // ========== 配置 ==========
+    const REQUIRED_USERNAME = "hongweipeng";
     const repoOwner = "MrHomeWP";
     const repoName = "work";
     const fileName = "data.json";
@@ -108,41 +111,85 @@
         return btoa(unescape(encodeURIComponent(str)));
     }
 
-    // Token 登录
+    // 本地存储登录状态（1小时免登录）
+    function setLoginSession(token) {
+        const expire = Date.now() + 3600 * 1000;
+        localStorage.setItem("admin_token", token);
+        localStorage.setItem("admin_expire", expire);
+    }
+
+    function getLoginSession() {
+        const token = localStorage.getItem("admin_token");
+        const expire = localStorage.getItem("admin_expire");
+        if (!token || !expire || Date.now() > expire) {
+            logout();
+            return null;
+        }
+        return token;
+    }
+
+    function logout() {
+        localStorage.removeItem("admin_token");
+        localStorage.removeItem("admin_expire");
+    }
+
+    // 自动登录
+    window.onload = function () {
+        const token = getLoginSession();
+        if (token) {
+            GH_TOKEN = token;
+            document.getElementById("loginBox").classList.add("hidden");
+            document.getElementById("mainPanel").classList.remove("hidden");
+            loadData();
+        }
+    };
+
+    // 登录
     async function login() {
-        const t = document.getElementById("token").value.trim();
-        if (!t) {
+        const user = document.getElementById("username").value.trim();
+        const token = document.getElementById("token").value.trim();
+
+        if (user !== REQUIRED_USERNAME) {
+            alert("用户名不正确");
+            return;
+        }
+        if (!token) {
             alert("请输入 Token");
             return;
         }
-        GH_TOKEN = t;
 
-        // 验证 Token 是否有效
+        // 验证 Token
         try {
-            const res = await fetch(`https://api.github.com/repos/${repoOwner}/${repoName}/contents/${fileName}`, {
-                headers: { Authorization: "token " + GH_TOKEN }
+            const test = await fetch(`https://api.github.com/repos/${repoOwner}/${repoName}/contents/${fileName}`, {
+                headers: { Authorization: "token " + token }
             });
-            if (!res.ok) throw new Error("Token 无效");
+            if (!test.ok) throw new Error("Token 无效");
 
+            GH_TOKEN = token;
+            setLoginSession(token);
             document.getElementById("loginBox").classList.add("hidden");
             document.getElementById("mainPanel").classList.remove("hidden");
             await loadData();
         } catch (e) {
-            alert("Token 无效或错误");
+            alert("Token 无效或无权限");
         }
     }
 
-    // 加载数据
+    // 加载最新数据
     async function loadData() {
-        const res = await fetch(`https://${repoOwner}.github.io/${repoName}/${fileName}`);
-        tableData = await res.json();
+        try {
+            const res = await fetch(`https://${repoOwner}.github.io/${repoName}/${fileName}`);
+            tableData = await res.json();
 
-        const info = await fetch(`https://api.github.com/repos/${repoOwner}/${repoName}/contents/${fileName}`, {
-            headers: { Authorization: "token " + GH_TOKEN }
-        });
-        const json = await info.json();
-        fileSha = json.sha;
-        renderTable();
+            const info = await fetch(`https://api.github.com/repos/${repoOwner}/${repoName}/contents/${fileName}`, {
+                headers: { Authorization: "token " + GH_TOKEN }
+            });
+            const json = await info.json();
+            fileSha = json.sha;
+            renderTable();
+        } catch (e) {
+            alert("加载失败：" + e.message);
+        }
     }
 
     function renderTable() {
@@ -170,7 +217,7 @@
         renderTable();
     }
 
-    // 保存（修复中文）
+    // 保存并自动刷新
     async function saveData() {
         try {
             const inputs = document.querySelectorAll("#roleTable tbody input");
@@ -189,14 +236,14 @@
                     "Authorization": "token " + GH_TOKEN
                 },
                 body: JSON.stringify({
-                    message: "更新",
+                    message: "后台更新数据",
                     content: content,
                     sha: fileSha
                 })
             });
 
-            alert("✅ 保存成功！");
-            loadData();
+            alert("✅ 保存成功！正在刷新最新数据...");
+            await loadData(); // 保存后自动刷新
         } catch (e) {
             alert("保存失败：" + e.message);
         }
