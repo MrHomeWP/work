@@ -40,7 +40,6 @@
         .save-btn { background: #2d8cf0; color: #fff; }
         .del-btn { background: #f44336; color: #fff; }
 
-        /* 登录样式 */
         .login-box {
             border: 1px solid #ddd;
             padding: 30px;
@@ -69,7 +68,6 @@
 </head>
 <body>
 
-<!-- 登录界面 -->
 <div id="loginBox" class="login-box">
     <h2>管理后台登录</h2>
     <input id="user" placeholder="账号">
@@ -77,10 +75,9 @@
     <button class="login-btn" onclick="login()">登录</button>
 </div>
 
-<!-- 表格（默认隐藏） -->
 <div id="mainPanel" class="hidden">
     <h2>在线表格管理</h2>
-
+    <input type="password" id="tokenInput" placeholder="请输入你的GitHub Token（仅本次会话有效）" style="width:100%;margin-bottom:15px;">
     <table id="roleTable">
         <thead>
             <tr>
@@ -92,7 +89,6 @@
         </thead>
         <tbody></tbody>
     </table>
-
     <div class="btn-box">
         <button class="add-btn" onclick="addRow()">➕ 添加</button>
         <button class="save-btn" onclick="saveData()">💾 保存全部修改</button>
@@ -100,15 +96,15 @@
 </div>
 
 <script>
-    // ========== 登录配置 ==========
+    // ========== 登录信息 ==========
     const USERNAME = "hongweipeng";
     const PASSWORD = "hxs1314";
-    // ==============================
 
-    // 仓库配置
+    // ========== 仓库信息 ==========
     const repoOwner = "MrHomeWP";
     const repoName = "work";
     const fileName = "data.json";
+
     let fileSha = "";
     let tableData = [];
 
@@ -119,23 +115,33 @@
         if (u === USERNAME && p === PASSWORD) {
             document.getElementById("loginBox").classList.add("hidden");
             document.getElementById("mainPanel").classList.remove("hidden");
-            loadData();
         } else {
             alert("账号或密码错误");
         }
     }
 
-    // 读取线上JSON
+    // 读取数据
     async function loadData() {
-        const res = await fetch(`https://${repoOwner}.github.io/${repoName}/${fileName}`);
-        tableData = await res.json();
-        const info = await fetch(`https://api.github.com/repos/${repoOwner}/${repoName}/contents/${fileName}`);
-        const json = await info.json();
-        fileSha = json.sha;
-        renderTable();
+        const GH_TOKEN = document.getElementById("tokenInput").value.trim();
+        if (!GH_TOKEN) {
+            alert("请先输入你的GitHub Token");
+            return;
+        }
+        try {
+            const res = await fetch(`https://${repoOwner}.github.io/${repoName}/${fileName}`);
+            tableData = await res.json();
+
+            const info = await fetch(`https://api.github.com/repos/${repoOwner}/${repoName}/contents/${fileName}`, {
+                headers: { Authorization: "token " + GH_TOKEN }
+            });
+            const json = await info.json();
+            fileSha = json.sha;
+            renderTable();
+        } catch (e) {
+            alert("加载失败：" + e.message);
+        }
     }
 
-    // 渲染表格
     function renderTable() {
         const tbody = document.querySelector("#roleTable tbody");
         tbody.innerHTML = "";
@@ -151,47 +157,51 @@
         });
     }
 
-    // 添加空行
     function addRow() {
-        tableData.push({
-            name: "默认名称",
-            currentPower: 0,
-            maxPower: 100
-        });
+        tableData.push({ name: "默认名称", currentPower: 0, maxPower: 100 });
         renderTable();
     }
 
-    // 删除行
     function delRow(idx) {
         tableData.splice(idx, 1);
         renderTable();
     }
 
-    // 保存到GitHub data.json
+    // 保存
     async function saveData() {
-        const inputs = document.querySelectorAll("#roleTable tbody input");
-        inputs.forEach(inp => {
-            const idx = Number(inp.dataset.index);
-            const key = inp.dataset.key;
-            tableData[idx][key] = key === "name" ? inp.value : Number(inp.value);
-        });
+        const GH_TOKEN = document.getElementById("tokenInput").value.trim();
+        if (!GH_TOKEN) {
+            alert("请先输入你的GitHub Token");
+            return;
+        }
+        try {
+            const inputs = document.querySelectorAll("#roleTable tbody input");
+            inputs.forEach(inp => {
+                const idx = Number(inp.dataset.index);
+                const key = inp.dataset.key;
+                tableData[idx][key] = key === "name" ? inp.value : Number(inp.value);
+            });
 
-        const content = btoa(JSON.stringify(tableData, null, 2));
+            const content = btoa(JSON.stringify(tableData, null, 2));
 
-        await fetch(`https://api.github.com/repos/${repoOwner}/${repoName}/contents/${fileName}`, {
-            method: "PUT",
-            headers: {
-                "Content-Type": "application/json",
-                "Accept": "application/vnd.github+json"
-            },
-            body: JSON.stringify({
-                message: "后台表格更新数据",
-                content: content,
-                sha: fileSha
-            })
-        });
-        alert("✅ 保存成功！主页可同步全部数据");
-        loadData();
+            await fetch(`https://api.github.com/repos/${repoOwner}/${repoName}/contents/${fileName}`, {
+                method: "PUT",
+                headers: {
+                    "Content-Type": "application/json",
+                    "Authorization": "token " + GH_TOKEN
+                },
+                body: JSON.stringify({
+                    message: "后台更新数据",
+                    content: content,
+                    sha: fileSha
+                })
+            });
+
+            alert("✅ 保存成功！");
+            loadData();
+        } catch (e) {
+            alert("保存失败：" + e.message);
+        }
     }
 </script>
 </body>
