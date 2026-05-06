@@ -40,7 +40,6 @@
         .save-btn { background: #2d8cf0; color: #fff; }
         .del-btn { background: #f44336; color: #fff; }
 
-        /* 登录样式 */
         .login-box {
             border: 1px solid #ddd;
             padding: 30px;
@@ -69,7 +68,6 @@
 </head>
 <body>
 
-<!-- 登录界面：账号 + 密码 + Token → 一次登录 -->
 <div id="loginBox" class="login-box">
     <h2>管理后台登录</h2>
     <input id="user" placeholder="账号">
@@ -78,10 +76,8 @@
     <button class="login-btn" onclick="login()">登录</button>
 </div>
 
-<!-- 表格面板 -->
 <div id="mainPanel" class="hidden">
     <h2>在线表格管理</h2>
-
     <table id="roleTable">
         <thead>
             <tr>
@@ -93,7 +89,6 @@
         </thead>
         <tbody></tbody>
     </table>
-
     <div class="btn-box">
         <button class="add-btn" onclick="addRow()">➕ 添加</button>
         <button class="save-btn" onclick="saveData()">💾 保存全部修改</button>
@@ -101,11 +96,11 @@
 </div>
 
 <script>
-    // ========== 固定登录信息 ==========
+    // 固定登录信息
     const REAL_USER = "hongweipeng";
     const REAL_PWD = "hxs1314";
 
-    // ========== 仓库信息 ==========
+    // 仓库信息
     const repoOwner = "MrHomeWP";
     const repoName = "work";
     const fileName = "data.json";
@@ -114,7 +109,12 @@
     let fileSha = "";
     let tableData = [];
 
-    // —————— 登录 ——————
+    // 兼容中文的base64编码
+    function utf8ToBase64(str) {
+        return btoa(unescape(encodeURIComponent(str)));
+    }
+
+    // 登录
     async function login() {
         let u = document.getElementById("user").value;
         let p = document.getElementById("pwd").value;
@@ -130,7 +130,7 @@
         }
     }
 
-    // —————— 加载数据 ——————
+    // 加载数据
     async function loadData() {
         try {
             let res = await fetch(`https://${repoOwner}.github.io/${repoName}/${fileName}`);
@@ -147,7 +147,7 @@
         }
     }
 
-    // —————— 渲染表格 ——————
+    // 渲染表格
     function renderTable() {
         let tbody = document.querySelector("#roleTable tbody");
         tbody.innerHTML = "";
@@ -163,19 +163,19 @@
         });
     }
 
-    // —————— 添加 ——————
+    // 添加角色
     function addRow() {
         tableData.push({ name: "默认名称", currentPower: 0, maxPower: 100 });
         renderTable();
     }
 
-    // —————— 删除 ——————
+    // 删除角色
     function delRow(idx) {
         tableData.splice(idx, 1);
         renderTable();
     }
 
-    // —————— 保存到 GitHub ——————
+    // 保存数据到GitHub（已修复中文编码）
     async function saveData() {
         try {
             let inputs = document.querySelectorAll("#roleTable tbody input");
@@ -185,7 +185,9 @@
                 tableData[idx][key] = key === "name" ? inp.value : Number(inp.value);
             });
 
-            let content = btoa(JSON.stringify(tableData, null, 2));
+            // 关键修复：中文转base64
+            let jsonStr = JSON.stringify(tableData, null, 2);
+            let content = utf8ToBase64(jsonStr);
 
             await fetch(`https://api.github.com/repos/${repoOwner}/${repoName}/contents/${fileName}`, {
                 method: "PUT",
@@ -204,6 +206,7 @@
             loadData();
         } catch (e) {
             alert("保存失败：" + e.message);
+            console.error(e);
         }
     }
 </script>
