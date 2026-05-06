@@ -4,99 +4,47 @@
     <meta charset="UTF-8">
     <title>表格管理后台</title>
     <style>
-        body {
-            max-width: 600px;
-            margin: 40px auto;
-            font-family: "Microsoft Yahei", sans-serif;
-            padding: 0 20px;
-        }
+        body { max-width: 600px; margin: 40px auto; font-family: "Microsoft Yahei", sans-serif; padding: 0 20px; }
         h2 { color: #8B5E3C; text-align: center; margin-bottom: 20px; }
-        table {
-            width: 100%;
-            border-collapse: collapse;
-            margin-bottom: 20px;
-        }
-        th,td {
-            border: 1px solid #ccc;
-            padding: 10px;
-            text-align: center;
-        }
+        table { width: 100%; border-collapse: collapse; margin-bottom: 20px; }
+        th,td { border: 1px solid #ccc; padding: 10px; text-align: center; }
         th { background: #f5f5f5; }
-        input {
-            width: 90px;
-            padding: 6px;
-            border: 1px solid #ccc;
-            border-radius: 4px;
-            text-align: center;
-        }
+        input { width: 90px; padding: 6px; border: 1px solid #ccc; border-radius: 4px; text-align: center; }
         .btn-box { display: flex; gap: 10px; justify-content: center; flex-wrap: wrap; }
-        button {
-            padding: 8px 16px;
-            border: none;
-            border-radius: 6px;
-            cursor: pointer;
-        }
+        button { padding: 8px 16px; border: none; border-radius: 6px; cursor: pointer; }
         .add-btn { background: #4caf50; color: #fff; }
         .save-btn { background: #2d8cf0; color: #fff; }
         .del-btn { background: #f44336; color: #fff; }
-
-        .login-box {
-            border: 1px solid #ddd;
-            padding: 30px;
-            border-radius: 12px;
-            background: #fff;
-            max-width: 320px;
-            margin: 80px auto;
-            text-align: center;
-        }
-        .login-box input {
-            width: 100%;
-            margin: 8px 0;
-            padding: 10px;
-        }
-        .login-btn {
-            background: #8B5E3C;
-            color: #fff;
-            width: 100%;
-            padding: 10px;
-            margin-top: 10px;
-        }
-        .hidden {
-            display: none !important;
-        }
+        .login-box { border: 1px solid #ddd; padding: 30px; border-radius: 12px; background: #fff; max-width: 320px; margin: 80px auto; text-align: center; }
+        .login-box input { width: 100%; margin: 8px 0; padding: 10px; }
+        .login-btn { background: #8B5E3C; color: #fff; width: 100%; padding: 10px; margin-top: 10px; }
+        .hidden { display: none !important; }
+        #jsonDebug { margin-top:20px; padding:10px; background:#f9f9f9; border:1px solid #ddd; border-radius:6px; white-space:pre-wrap; font-size:12px; max-height:200px; overflow:auto; }
     </style>
 </head>
 <body>
 
-<!-- 登录：用户名 + Token -->
 <div id="loginBox" class="login-box">
     <h2>管理后台登录</h2>
-    <input id="username" placeholder="请输入用户名" autocomplete="off">
-    <input id="token" type="password" placeholder="请输入 GitHub Token" autocomplete="off">
+    <input id="username" placeholder="用户名">
+    <input id="token" type="password" placeholder="GitHub Token">
     <button class="login-btn" onclick="login()">登录</button>
 </div>
 
 <div id="mainPanel" class="hidden">
     <h2>在线表格管理</h2>
     <table id="roleTable">
-        <thead>
-            <tr>
-                <th>名称</th>
-                <th>当前</th>
-                <th>总</th>
-                <th>操作</th>
-            </tr>
-        </thead>
+        <thead><tr><th>名称</th><th>当前</th><th>总</th><th>操作</th></tr></thead>
         <tbody></tbody>
     </table>
+    <div id="jsonDebug"></div>
     <div class="btn-box">
         <button class="add-btn" onclick="addRow()">➕ 添加</button>
-        <button class="save-btn" onclick="saveData()">💾 保存全部修改</button>
+        <button class="save-btn" onclick="saveData()">💾 保存</button>
     </div>
 </div>
 
 <script>
-    // ========== 配置 ==========
     const REQUIRED_USERNAME = "hongweipeng";
     const repoOwner = "MrHomeWP";
     const repoName = "work";
@@ -104,146 +52,102 @@
 
     let GH_TOKEN = "";
     let fileSha = "";
-    let tableData = [];
 
-    // 中文 base64 兼容
-    function utf8ToBase64(str) {
-        return btoa(unescape(encodeURIComponent(str)));
-    }
+    // 1小时免登录
+    function setLoginSession(token) { localStorage.setItem("t", token); localStorage.setItem("e", Date.now() + 3600 * 1000); }
+    function getLoginSession() { const t = localStorage.getItem("t"), e = localStorage.getItem("e"); return (t && e && Date.now() < e) ? t : null; }
 
-    // 本地存储登录状态（1小时免登录）
-    function setLoginSession(token) {
-        const expire = Date.now() + 3600 * 1000;
-        localStorage.setItem("admin_token", token);
-        localStorage.setItem("admin_expire", expire);
-    }
+    // 中文base64编解码
+    function utf8ToBase64(str) { return btoa(unescape(encodeURIComponent(str))); }
+    function base64ToUtf8(str) { return decodeURIComponent(escape(atob(str))); }
 
-    function getLoginSession() {
-        const token = localStorage.getItem("admin_token");
-        const expire = localStorage.getItem("admin_expire");
-        if (!token || !expire || Date.now() > expire) {
-            logout();
-            return null;
-        }
-        return token;
-    }
-
-    function logout() {
-        localStorage.removeItem("admin_token");
-        localStorage.removeItem("admin_expire");
-    }
-
-    // 自动登录
-    window.onload = function () {
-        const token = getLoginSession();
-        if (token) {
-            GH_TOKEN = token;
-            document.getElementById("loginBox").classList.add("hidden");
-            document.getElementById("mainPanel").classList.remove("hidden");
-            loadData();
-        }
-    };
+    // 初始化
+    window.onload = () => { const t = getLoginSession(); if (t) { GH_TOKEN = t; loginSuccess(); } };
 
     // 登录
     async function login() {
         const user = document.getElementById("username").value.trim();
         const token = document.getElementById("token").value.trim();
-
-        if (user !== REQUIRED_USERNAME) {
-            alert("用户名不正确");
-            return;
-        }
-        if (!token) {
-            alert("请输入 Token");
-            return;
-        }
-
-        // 验证 Token
-        try {
-            const test = await fetch(`https://api.github.com/repos/${repoOwner}/${repoName}/contents/${fileName}`, {
-                headers: { Authorization: "token " + token }
-            });
-            if (!test.ok) throw new Error("Token 无效");
-
-            GH_TOKEN = token;
-            setLoginSession(token);
-            document.getElementById("loginBox").classList.add("hidden");
-            document.getElementById("mainPanel").classList.remove("hidden");
-            await loadData();
-        } catch (e) {
-            alert("Token 无效或无权限");
-        }
+        if (user !== REQUIRED_USERNAME) return alert("用户名错误");
+        if (!token) return alert("请输入Token");
+        GH_TOKEN = token;
+        try { await getFileInfo(); setLoginSession(token); loginSuccess(); } catch (e) { alert("Token无效"); }
     }
 
-    // 加载最新数据
-    async function loadData() {
-        try {
-            const res = await fetch(`https://${repoOwner}.github.io/${repoName}/${fileName}`);
-            tableData = await res.json();
-
-            const info = await fetch(`https://api.github.com/repos/${repoOwner}/${repoName}/contents/${fileName}`, {
-                headers: { Authorization: "token " + GH_TOKEN }
-            });
-            const json = await info.json();
-            fileSha = json.sha;
-            renderTable();
-        } catch (e) {
-            alert("加载失败：" + e.message);
-        }
+    function loginSuccess() {
+        document.getElementById("loginBox").classList.add("hidden");
+        document.getElementById("mainPanel").classList.remove("hidden");
+        loadRealData();
     }
 
-    function renderTable() {
+    // 获取文件信息（含sha和base64内容）
+    async function getFileInfo() {
+        const res = await fetch(`https://api.github.com/repos/${repoOwner}/${repoName}/contents/${fileName}`, {
+            headers: { Authorization: "token " + GH_TOKEN }
+        });
+        const data = await res.json();
+        fileSha = data.sha;
+        return data;
+    }
+
+    // 加载真实数据（修复中文解码）
+    async function loadRealData() {
+        const file = await getFileInfo();
+        const json = JSON.parse(base64ToUtf8(file.content));
+        document.getElementById("jsonDebug").innerText = JSON.stringify(json, null, 2);
+        render(json);
+    }
+
+    function render(list) {
         const tbody = document.querySelector("#roleTable tbody");
         tbody.innerHTML = "";
-        tableData.forEach((item, idx) => {
+        list.forEach((it, i) => {
             const tr = document.createElement("tr");
             tr.innerHTML = `
-                <td><input value="${item.name}" data-key="name" data-index="${idx}"></td>
-                <td><input type="number" value="${item.currentPower}" data-key="currentPower" data-index="${idx}"></td>
-                <td><input type="number" value="${item.maxPower}" data-key="maxPower" data-index="${idx}"></td>
-                <td><button class="del-btn" onclick="delRow(${idx})">删除</button></td>
-            `;
+                <td><input class="n" value="${it.name}"></td>
+                <td><input class="c" type="number" value="${it.currentPower}"></td>
+                <td><input class="m" type="number" value="${it.maxPower}"></td>
+                <td><button onclick="delRow(${i})">删除</button></td>`;
             tbody.appendChild(tr);
         });
     }
 
     function addRow() {
-        tableData.push({ name: "新角色", currentPower: 0, maxPower: 100 });
-        renderTable();
+        const tbody = document.querySelector("#roleTable tbody");
+        const tr = document.createElement("tr");
+        tr.innerHTML = `<td><input class="n" value="新角色"></td><td><input class="c" type="number" value="0"></td><td><input class="m" type="number" value="100"></td><td><button onclick="delRow(-1)">删除</button></td>`;
+        tbody.appendChild(tr);
     }
 
-    function delRow(idx) {
-        tableData.splice(idx, 1);
-        renderTable();
-    }
+    window.delRow = (idx) => {
+        const rows = document.querySelectorAll("#roleTable tbody tr");
+        if (idx === -1) rows[rows.length - 1].remove(); else rows[idx].remove();
+    };
 
-    // 保存并自动刷新
+    // 保存 + 实时刷新
     async function saveData() {
         try {
-            const inputs = document.querySelectorAll("#roleTable tbody input");
-            inputs.forEach(inp => {
-                const idx = Number(inp.dataset.index);
-                const key = inp.dataset.key;
-                tableData[idx][key] = key === "name" ? inp.value : Number(inp.value);
-            });
+            const rows = document.querySelectorAll("#roleTable tbody tr");
+            const data = Array.from(rows).map(r => ({
+                name: r.querySelector(".n").value,
+                currentPower: Number(r.querySelector(".c").value) || 0,
+                maxPower: Number(r.querySelector(".m").value) || 0
+            }));
 
-            const content = utf8ToBase64(JSON.stringify(tableData, null, 2));
+            await getFileInfo();
 
             await fetch(`https://api.github.com/repos/${repoOwner}/${repoName}/contents/${fileName}`, {
                 method: "PUT",
-                headers: {
-                    "Content-Type": "application/json",
-                    "Authorization": "token " + GH_TOKEN
-                },
+                headers: { "Content-Type": "application/json", Authorization: "token " + GH_TOKEN },
                 body: JSON.stringify({
-                    message: "后台更新数据",
-                    content: content,
+                    message: "update",
+                    content: utf8ToBase64(JSON.stringify(data, null, 2)),
                     sha: fileSha
                 })
             });
 
-            alert("✅ 保存成功！正在刷新最新数据...");
-            await loadData(); // 保存后自动刷新
+            alert("✅ 保存成功！");
+            loadRealData(); // 立即刷新真实数据
         } catch (e) {
             alert("保存失败：" + e.message);
         }
