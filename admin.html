@@ -68,11 +68,10 @@
 </head>
 <body>
 
+<!-- 登录：只需要 Token -->
 <div id="loginBox" class="login-box">
-    <h2>管理后台登录</h2>
-    <input id="user" placeholder="账号">
-    <input id="pwd" type="password" placeholder="密码">
-    <input id="token" type="password" placeholder="GitHub Token">
+    <h2>Token 登录</h2>
+    <input id="token" type="password" placeholder="请输入 GitHub Token">
     <button class="login-btn" onclick="login()">登录</button>
 </div>
 
@@ -96,11 +95,6 @@
 </div>
 
 <script>
-    // 固定登录信息
-    const REAL_USER = "hongweipeng";
-    const REAL_PWD = "hxs1314";
-
-    // 仓库信息
     const repoOwner = "MrHomeWP";
     const repoName = "work";
     const fileName = "data.json";
@@ -109,50 +103,53 @@
     let fileSha = "";
     let tableData = [];
 
-    // 兼容中文的base64编码
+    // 中文 base64 兼容
     function utf8ToBase64(str) {
         return btoa(unescape(encodeURIComponent(str)));
     }
 
-    // 登录
+    // Token 登录
     async function login() {
-        let u = document.getElementById("user").value;
-        let p = document.getElementById("pwd").value;
-        let t = document.getElementById("token").value;
+        const t = document.getElementById("token").value.trim();
+        if (!t) {
+            alert("请输入 Token");
+            return;
+        }
+        GH_TOKEN = t;
 
-        if (u === REAL_USER && p === REAL_PWD && t) {
-            GH_TOKEN = t;
+        // 验证 Token 是否有效
+        try {
+            const res = await fetch(`https://api.github.com/repos/${repoOwner}/${repoName}/contents/${fileName}`, {
+                headers: { Authorization: "token " + GH_TOKEN }
+            });
+            if (!res.ok) throw new Error("Token 无效");
+
             document.getElementById("loginBox").classList.add("hidden");
             document.getElementById("mainPanel").classList.remove("hidden");
             await loadData();
-        } else {
-            alert("账号、密码或Token不能为空/错误");
+        } catch (e) {
+            alert("Token 无效或错误");
         }
     }
 
     // 加载数据
     async function loadData() {
-        try {
-            let res = await fetch(`https://${repoOwner}.github.io/${repoName}/${fileName}`);
-            tableData = await res.json();
+        const res = await fetch(`https://${repoOwner}.github.io/${repoName}/${fileName}`);
+        tableData = await res.json();
 
-            let info = await fetch(`https://api.github.com/repos/${repoOwner}/${repoName}/contents/${fileName}`, {
-                headers: { Authorization: "token " + GH_TOKEN }
-            });
-            let json = await info.json();
-            fileSha = json.sha;
-            renderTable();
-        } catch (e) {
-            alert("加载失败：" + e.message);
-        }
+        const info = await fetch(`https://api.github.com/repos/${repoOwner}/${repoName}/contents/${fileName}`, {
+            headers: { Authorization: "token " + GH_TOKEN }
+        });
+        const json = await info.json();
+        fileSha = json.sha;
+        renderTable();
     }
 
-    // 渲染表格
     function renderTable() {
-        let tbody = document.querySelector("#roleTable tbody");
+        const tbody = document.querySelector("#roleTable tbody");
         tbody.innerHTML = "";
         tableData.forEach((item, idx) => {
-            let tr = document.createElement("tr");
+            const tr = document.createElement("tr");
             tr.innerHTML = `
                 <td><input value="${item.name}" data-key="name" data-index="${idx}"></td>
                 <td><input type="number" value="${item.currentPower}" data-key="currentPower" data-index="${idx}"></td>
@@ -163,31 +160,27 @@
         });
     }
 
-    // 添加角色
     function addRow() {
-        tableData.push({ name: "默认名称", currentPower: 0, maxPower: 100 });
+        tableData.push({ name: "新角色", currentPower: 0, maxPower: 100 });
         renderTable();
     }
 
-    // 删除角色
     function delRow(idx) {
         tableData.splice(idx, 1);
         renderTable();
     }
 
-    // 保存数据到GitHub（已修复中文编码）
+    // 保存（修复中文）
     async function saveData() {
         try {
-            let inputs = document.querySelectorAll("#roleTable tbody input");
+            const inputs = document.querySelectorAll("#roleTable tbody input");
             inputs.forEach(inp => {
-                let idx = Number(inp.dataset.index);
-                let key = inp.dataset.key;
+                const idx = Number(inp.dataset.index);
+                const key = inp.dataset.key;
                 tableData[idx][key] = key === "name" ? inp.value : Number(inp.value);
             });
 
-            // 关键修复：中文转base64
-            let jsonStr = JSON.stringify(tableData, null, 2);
-            let content = utf8ToBase64(jsonStr);
+            const content = utf8ToBase64(JSON.stringify(tableData, null, 2));
 
             await fetch(`https://api.github.com/repos/${repoOwner}/${repoName}/contents/${fileName}`, {
                 method: "PUT",
@@ -196,7 +189,7 @@
                     "Authorization": "token " + GH_TOKEN
                 },
                 body: JSON.stringify({
-                    message: "后台更新数据",
+                    message: "更新",
                     content: content,
                     sha: fileSha
                 })
@@ -206,7 +199,6 @@
             loadData();
         } catch (e) {
             alert("保存失败：" + e.message);
-            console.error(e);
         }
     }
 </script>
