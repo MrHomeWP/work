@@ -40,6 +40,7 @@
         .save-btn { background: #2d8cf0; color: #fff; }
         .del-btn { background: #f44336; color: #fff; }
 
+        /* 登录样式 */
         .login-box {
             border: 1px solid #ddd;
             padding: 30px;
@@ -68,16 +69,19 @@
 </head>
 <body>
 
+<!-- 登录界面：账号 + 密码 + Token → 一次登录 -->
 <div id="loginBox" class="login-box">
     <h2>管理后台登录</h2>
     <input id="user" placeholder="账号">
     <input id="pwd" type="password" placeholder="密码">
+    <input id="token" type="password" placeholder="GitHub Token">
     <button class="login-btn" onclick="login()">登录</button>
 </div>
 
+<!-- 表格面板 -->
 <div id="mainPanel" class="hidden">
     <h2>在线表格管理</h2>
-    <input type="password" id="tokenInput" placeholder="请输入你的GitHub Token（仅本次会话有效）" style="width:100%;margin-bottom:15px;">
+
     <table id="roleTable">
         <thead>
             <tr>
@@ -89,6 +93,7 @@
         </thead>
         <tbody></tbody>
     </table>
+
     <div class="btn-box">
         <button class="add-btn" onclick="addRow()">➕ 添加</button>
         <button class="save-btn" onclick="saveData()">💾 保存全部修改</button>
@@ -96,45 +101,45 @@
 </div>
 
 <script>
-    // ========== 登录信息 ==========
-    const USERNAME = "hongweipeng";
-    const PASSWORD = "hxs1314";
+    // ========== 固定登录信息 ==========
+    const REAL_USER = "hongweipeng";
+    const REAL_PWD = "hxs1314";
 
     // ========== 仓库信息 ==========
     const repoOwner = "MrHomeWP";
     const repoName = "work";
     const fileName = "data.json";
 
+    let GH_TOKEN = "";
     let fileSha = "";
     let tableData = [];
 
-    // 登录
-    function login() {
-        const u = document.getElementById("user").value;
-        const p = document.getElementById("pwd").value;
-        if (u === USERNAME && p === PASSWORD) {
+    // —————— 登录 ——————
+    async function login() {
+        let u = document.getElementById("user").value;
+        let p = document.getElementById("pwd").value;
+        let t = document.getElementById("token").value;
+
+        if (u === REAL_USER && p === REAL_PWD && t) {
+            GH_TOKEN = t;
             document.getElementById("loginBox").classList.add("hidden");
             document.getElementById("mainPanel").classList.remove("hidden");
+            await loadData();
         } else {
-            alert("账号或密码错误");
+            alert("账号、密码或Token不能为空/错误");
         }
     }
 
-    // 读取数据
+    // —————— 加载数据 ——————
     async function loadData() {
-        const GH_TOKEN = document.getElementById("tokenInput").value.trim();
-        if (!GH_TOKEN) {
-            alert("请先输入你的GitHub Token");
-            return;
-        }
         try {
-            const res = await fetch(`https://${repoOwner}.github.io/${repoName}/${fileName}`);
+            let res = await fetch(`https://${repoOwner}.github.io/${repoName}/${fileName}`);
             tableData = await res.json();
 
-            const info = await fetch(`https://api.github.com/repos/${repoOwner}/${repoName}/contents/${fileName}`, {
+            let info = await fetch(`https://api.github.com/repos/${repoOwner}/${repoName}/contents/${fileName}`, {
                 headers: { Authorization: "token " + GH_TOKEN }
             });
-            const json = await info.json();
+            let json = await info.json();
             fileSha = json.sha;
             renderTable();
         } catch (e) {
@@ -142,11 +147,12 @@
         }
     }
 
+    // —————— 渲染表格 ——————
     function renderTable() {
-        const tbody = document.querySelector("#roleTable tbody");
+        let tbody = document.querySelector("#roleTable tbody");
         tbody.innerHTML = "";
         tableData.forEach((item, idx) => {
-            const tr = document.createElement("tr");
+            let tr = document.createElement("tr");
             tr.innerHTML = `
                 <td><input value="${item.name}" data-key="name" data-index="${idx}"></td>
                 <td><input type="number" value="${item.currentPower}" data-key="currentPower" data-index="${idx}"></td>
@@ -157,32 +163,29 @@
         });
     }
 
+    // —————— 添加 ——————
     function addRow() {
         tableData.push({ name: "默认名称", currentPower: 0, maxPower: 100 });
         renderTable();
     }
 
+    // —————— 删除 ——————
     function delRow(idx) {
         tableData.splice(idx, 1);
         renderTable();
     }
 
-    // 保存
+    // —————— 保存到 GitHub ——————
     async function saveData() {
-        const GH_TOKEN = document.getElementById("tokenInput").value.trim();
-        if (!GH_TOKEN) {
-            alert("请先输入你的GitHub Token");
-            return;
-        }
         try {
-            const inputs = document.querySelectorAll("#roleTable tbody input");
+            let inputs = document.querySelectorAll("#roleTable tbody input");
             inputs.forEach(inp => {
-                const idx = Number(inp.dataset.index);
-                const key = inp.dataset.key;
+                let idx = Number(inp.dataset.index);
+                let key = inp.dataset.key;
                 tableData[idx][key] = key === "name" ? inp.value : Number(inp.value);
             });
 
-            const content = btoa(JSON.stringify(tableData, null, 2));
+            let content = btoa(JSON.stringify(tableData, null, 2));
 
             await fetch(`https://api.github.com/repos/${repoOwner}/${repoName}/contents/${fileName}`, {
                 method: "PUT",
