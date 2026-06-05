@@ -1,7 +1,12 @@
 [
   {
     "name": "杨皓瑜",
-    "currentPower": 7,
+    "currentPower": 8,
     "maxPower": 20
+  },
+  {
+    "name": "新角色",
+    "currentPower": 0,
+    "maxPower": 100
   }
 ]
